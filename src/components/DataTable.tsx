@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Trash2, Plus, TableIcon, Pencil, Check, Eye, Copy, ArrowLeftRight } from "lucide-react";
+import { useState, useCallback, useRef } from "react";
+import { Trash2, Plus, TableIcon, Pencil, Check, Eye, Copy, ArrowLeftRight, GripHorizontal } from "lucide-react";
+import { motion, useDragControls } from "framer-motion";
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +19,8 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogPortal,
+  DialogOverlay,
 } from "@/components/ui/dialog";
 
 interface DataTableProps {
@@ -30,6 +34,7 @@ export default function DataTable({ columns, data, onDataChange, isLoading }: Da
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null);
   const [editValue, setEditValue] = useState("");
   const [compareRows, setCompareRows] = useState<{ original: number; duplicate: number } | null>(null);
+  const dragControls = useDragControls();
 
   const startEdit = useCallback((ri: number, col: string, val: string | null) => {
     setEditingCell({ row: ri, col });
@@ -238,76 +243,96 @@ export default function DataTable({ columns, data, onDataChange, isLoading }: Da
 
       {compareRows && (
         <Dialog open={!!compareRows} onOpenChange={() => setCompareRows(null)}>
-          <DialogContent className="sm:max-w-2xl bg-zinc-900 border-zinc-800 text-white p-6">
-            <DialogHeader className="mb-4">
-              <DialogTitle className="flex items-center gap-2 text-xl">
-                <Copy className="h-6 w-6 text-indigo-400" />
-                Compare Duplicate Records
-              </DialogTitle>
-              <DialogDescription className="text-zinc-400 text-base">
-                Review the original and duplicate record side-by-side to decide which one to keep.
-              </DialogDescription>
-            </DialogHeader>
+          <DialogPortal>
+            <DialogOverlay />
+            <DialogPrimitive.Popup
+              data-slot="dialog-content"
+              className="fixed top-1/2 left-1/2 z-50 w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 outline-none sm:max-w-lg"
+              render={
+                <motion.div
+                  drag
+                  dragControls={dragControls}
+                  dragListener={false}
+                  dragMomentum={false}
+                  className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden text-white flex flex-col"
+                />
+              }
+            >
+              <div
+                className="bg-zinc-800/80 px-4 py-3 flex items-center justify-between cursor-grab active:cursor-grabbing border-b border-zinc-700/50 select-none"
+                onPointerDown={(e) => dragControls.start(e)}
+              >
+                <div className="flex items-center gap-2">
+                  <Copy className="h-4 w-4 text-indigo-400" />
+                  <h3 className="font-semibold text-base">Compare Duplicate Records</h3>
+                </div>
+                <GripHorizontal className="h-4 w-4 text-zinc-500" />
+              </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 py-4">
-              {/* Original */}
-              <div className="space-y-4 rounded-2xl border border-zinc-700/50 bg-zinc-800/30 p-6 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10 px-3 py-1 text-sm font-medium">Original (Row #{compareRows.original + 1})</Badge>
-                  </div>
-                  <div className="space-y-4">
-                    {columns.map(c => (
-                      <div key={c} className="flex flex-col gap-1 border-b border-zinc-800/50 pb-2 last:border-0">
-                        <span className="text-xs uppercase tracking-wider text-zinc-500 font-semibold">{c}</span>
-                        <span className="text-base text-zinc-200 leading-relaxed break-words">{data[compareRows.original][c] ?? "-"}</span>
+              <div className="p-4 sm:p-5">
+                <p className="text-zinc-400 text-xs mb-4">
+                  Review original and duplicate side-by-side to decide which one to keep.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Original */}
+                  <div className="rounded-xl border border-zinc-700/50 bg-zinc-800/30 p-4 flex flex-col justify-between min-h-[300px]">
+                    <div>
+                      <div className="flex items-center mb-3">
+                        <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider">Original (Row #{compareRows.original + 1})</Badge>
                       </div>
-                    ))}
+                      <div className="space-y-3">
+                        {columns.map(c => (
+                          <div key={c} className="flex flex-col gap-0.5 border-b border-zinc-800/50 pb-1.5 last:border-0">
+                            <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">{c}</span>
+                            <span className="text-sm text-zinc-200 leading-snug break-words">{data[compareRows.original][c] ?? "-"}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <Button
+                      className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 font-bold h-9 text-xs shadow-lg shadow-emerald-900/20"
+                      onClick={() => deleteRow(compareRows.duplicate)}
+                    >
+                      เก็บอันเดิมไว้
+                    </Button>
+                  </div>
+
+                  {/* Duplicate */}
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 flex flex-col justify-between min-h-[300px]">
+                    <div>
+                      <div className="flex items-center mb-3">
+                        <Badge className="bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider">Duplicate (Row #{compareRows.duplicate + 1})</Badge>
+                      </div>
+                      <div className="space-y-3">
+                        {columns.map(c => (
+                          <div key={c} className="flex flex-col gap-0.5 border-b border-zinc-800/50 pb-1.5 last:border-0">
+                            <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-bold">{c}</span>
+                            <span className="text-sm text-zinc-200 leading-snug break-words">{data[compareRows.duplicate][c] ?? "-"}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <Button
+                      className="w-full mt-4 bg-red-600 hover:bg-red-500 text-white font-bold h-9 text-xs shadow-lg shadow-red-900/20"
+                      onClick={() => deleteRow(compareRows.original)}
+                    >
+                      เลือกอันนี้แทน
+                    </Button>
                   </div>
                 </div>
-                <Button
-                  className="w-full mt-6 bg-emerald-600 hover:bg-emerald-500 font-bold h-12 text-base shadow-lg shadow-emerald-900/20"
-                  onClick={() => deleteRow(compareRows.duplicate)}
-                >
-                  เก็บอันเดิมไว้ (ลบตัวที่ซ้ำ)
-                </Button>
-              </div>
 
-              {/* Duplicate */}
-              <div className="space-y-4 rounded-2xl border border-red-500/30 bg-red-500/5 p-6 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <Badge className="bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/10 px-3 py-1 text-sm font-medium">Duplicate (Row #{compareRows.duplicate + 1})</Badge>
-                  </div>
-                  <div className="space-y-4">
-                    {columns.map(c => (
-                      <div key={c} className="flex flex-col gap-1 border-b border-zinc-800/50 pb-2 last:border-0">
-                        <span className="text-xs uppercase tracking-wider text-zinc-500 font-semibold">{c}</span>
-                        <span className="text-base text-zinc-200 leading-relaxed break-words">{data[compareRows.duplicate][c] ?? "-"}</span>
-                      </div>
-                    ))}
-                  </div>
+                <div className="flex items-center justify-between gap-3 mt-5 pt-4 border-t border-zinc-800/50">
+                  <Button variant="ghost" size="sm" onClick={() => setCompareRows(null)} className="text-zinc-400 hover:text-white hover:bg-zinc-800 h-8 text-xs">
+                    ยกเลิก
+                  </Button>
+                  <Button variant="outline" size="sm" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 h-8 px-4 text-xs" onClick={() => setCompareRows(null)}>
+                    เก็บไว้ทั้งคู่
+                  </Button>
                 </div>
-                <Button
-                  className="w-full mt-6 bg-red-600 hover:bg-red-500 text-white font-bold h-12 text-base shadow-lg shadow-red-900/20"
-                  onClick={() => deleteRow(compareRows.original)}
-                >
-                  เลือกอันนี้แทน (ลบอันเก่า)
-                </Button>
               </div>
-            </div>
-
-            <DialogFooter className="border-t border-zinc-800 mt-6 pt-6 flex flex-col sm:flex-row justify-between gap-4">
-              <Button variant="ghost" onClick={() => setCompareRows(null)} className="text-zinc-400 hover:text-white hover:bg-zinc-800 w-full sm:w-auto">
-                ยกเลิก (ปิด)
-              </Button>
-              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 h-10 px-6 w-full sm:w-auto" onClick={() => setCompareRows(null)}>
-                  เก็บไว้ทั้งคู่
-                </Button>
-              </div>
-            </DialogFooter>
-          </DialogContent>
+            </DialogPrimitive.Popup>
+          </DialogPortal>
         </Dialog>
       )}
     </Card>
