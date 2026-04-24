@@ -16,7 +16,7 @@ const PRESETS = [
   {
     name: "Product Tag",
     icon: Tag,
-    columns: ["ID", "Weight", "size", "Price", "Quantity", "Stones"],
+    columns: ["ID", "Weight", "size", "Price", "Certificate", "Stones"],
   },
   {
     name: "Invoice",

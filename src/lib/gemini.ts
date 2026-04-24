@@ -17,7 +17,7 @@ INSTRUCTIONS:
 2. ID EXTRACTION: For the "ID" column, extract the sequence located directly BELOW the barcode.
 3. SIZE EXTRACTION: For the "size" column (case-sensitive), extract the numeric or alphanumeric value located directly BELOW the metal indicator (e.g., "750WG", "Au999", "WG", "YG").
 4. STONES EXTRACTION: For the "Stones" column, extract stone details with quantities (e.g., "1 CuD3.040, 6 RD0.060").
-5. QUANTITY FORMAT: For the "Quantity" column, you MUST return the value with parentheses. Example: if the image says "1", return "(1)". If the image says "(2)", return "(2)". ALWAYS include parentheses for this column.
+5. CERTIFICATE EXTRACTION: For the "Certificate" column, extract the FULL certificate identifier or quantity indicator, including any suffixes or special characters (e.g., "GIA 12345678", "(1) /g"). Do not omit any part of the text for this column. ถ้าไม่มีให้ใช้ "ไม่มี".
 6. DATA AGGREGATION: For each image, return exactly ONE JSON object. If multiple values exist for one column, concatenate them.
 7. COLUMN KEYS: You MUST use these EXACT keys: [${columnList}]. Do NOT use "Code" or any other name; use only the keys provided in this list.
 8. FORMAT: Return ONLY a valid JSON array of objects. No markdown, no explanations.

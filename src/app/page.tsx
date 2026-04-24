@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 
 export default function Home() {
   const [images, setImages] = useState<ImageFile[]>([]);
-  const [columns, setColumns] = useState<string[]>(["ID", "Weight", "size", "Price", "Quantity", "Stones"]);
+  const [columns, setColumns] = useState<string[]>(["ID", "Weight", "size", "Price", "Certificate", "Stones"]);
   const [extractedData, setExtractedData] = useState<Record<string, string | null>[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,12 +98,9 @@ export default function Home() {
             value = item["Code"];
           }
           
-          // Ensure Quantity has parentheses if it's a number or missing them
-          if (col === "Quantity" && value && value !== "ไม่มี") {
-            const strVal = String(value).trim();
-            if (!strVal.startsWith("(") || !strVal.endsWith(")")) {
-              value = `(${strVal})`;
-            }
+          // Ensure Certificate is extracted (no special formatting needed typically)
+          if (col === "Certificate" && value && value !== "ไม่มี") {
+            // Keep value as is
           }
           
           transformed[col] = value ?? null;
