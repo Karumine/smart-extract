@@ -8,6 +8,8 @@ import SchemaBuilder from "@/components/SchemaBuilder";
 import DataTable from "@/components/DataTable";
 import ExportButton from "@/components/ExportButton";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Loader2 } from "lucide-react";
 
 export default function Home() {
   const [images, setImages] = useState<ImageFile[]>([]);
@@ -16,6 +18,8 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [currentProcess, setCurrentProcess] = useState<{ current: number; total: number } | null>(null);
 
   // Load data from localStorage on mount
   useEffect(() => {
@@ -64,56 +68,83 @@ export default function Home() {
     setIsLoading(true);
     setError(null);
     setDuplicateWarning(null);
+    setProgress(0);
+    setCurrentProcess({ current: 0, total: images.length });
+
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const extractSingleImage = async (img: ImageFile, retryCount = 0): Promise<any[]> => {
+      try {
+        const payload = {
+          images: [{ base64: img.base64, mimeType: img.mimeType }],
+          columns,
+        };
+
+        const response = await fetch("/api/extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || "Extraction failed");
+        }
+
+        return result.data || [];
+      } catch (err) {
+        if (retryCount < 2) {
+          // 3 attempts total
+          console.warn(`Retry attempt ${retryCount + 1} for image...`);
+          await sleep(2000); // Wait 2 seconds before retry
+          return extractSingleImage(img, retryCount + 1);
+        }
+        throw err;
+      }
+    };
 
     try {
-      const payload = {
-        images: images.map((img) => ({ base64: img.base64, mimeType: img.mimeType })),
-        columns,
-      };
+      const allNewData: Record<string, string | null>[] = [];
 
-      const response = await fetch("/api/extract", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      for (let i = 0; i < images.length; i++) {
+        setCurrentProcess({ current: i + 1, total: images.length });
+        setProgress(Math.round((i / images.length) * 100));
 
-      const result = await response.json();
+        const imgData = await extractSingleImage(images[i]);
 
-      if (!response.ok) {
-        throw new Error(result.error || "Extraction failed");
-      }
+        // Transform data: handle column renames and formatting
+        const newData = imgData.map((item: Record<string, any>) => {
+          const transformed: Record<string, string | null> = {};
 
-      const rawData = result.data || [];
-      
-      // Transform data: handle column renames and formatting
-      const newData = rawData.map((item: Record<string, any>) => {
-        const transformed: Record<string, string | null> = {};
-        
-        // Use the actual columns defined in state to build the object
-        columns.forEach(col => {
-          let value = item[col];
-          
-          // Fallback for size if AI used "Code"
-          if (col === "size" && value === undefined && item["Code"] !== undefined) {
-            value = item["Code"];
-          }
-          
-          // Ensure Certificate is extracted (no special formatting needed typically)
-          if (col === "Certificate" && value && value !== "ไม่มี") {
-            // Keep value as is
-          }
-          
-          transformed[col] = value ?? null;
+          columns.forEach((col) => {
+            let value = item[col];
+
+            if (col === "size" && value === undefined && item["Code"] !== undefined) {
+              value = item["Code"];
+            }
+
+            transformed[col] = value ?? null;
+          });
+
+          return transformed;
         });
-        
-        return transformed;
-      });
+
+        allNewData.push(...newData);
+        setProgress(Math.round(((i + 1) / images.length) * 100));
+
+        // Delay 5 seconds between images, but not after the last one
+        if (i < images.length - 1) {
+          await sleep(5000);
+        }
+      }
 
       // Check for duplicates (based on ID or first column)
       const keyColumn = columns.includes("ID") ? "ID" : columns[0];
-      const existingIds = new Set(extractedData.map(item => item[keyColumn]?.toString().toLowerCase()));
-      const duplicates = newData.filter((item: Record<string, string | null>) => 
-        item[keyColumn] && existingIds.has(item[keyColumn]?.toString().toLowerCase())
+      const existingIds = new Set(extractedData.map((item) => item[keyColumn]?.toString().toLowerCase()));
+      const duplicates = allNewData.filter(
+        (item: Record<string, string | null>) =>
+          item[keyColumn] && existingIds.has(item[keyColumn]?.toString().toLowerCase())
       );
 
       if (duplicates.length > 0) {
@@ -121,16 +152,17 @@ export default function Home() {
       }
 
       // Append new data
-      setExtractedData(prev => [...prev, ...newData]);
-      
+      setExtractedData((prev) => [...prev, ...allNewData]);
+
       // Clear images after successful extraction
       setImages([]);
-      
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "An unexpected error occurred";
       setError(msg);
     } finally {
       setIsLoading(false);
+      setProgress(100);
+      setTimeout(() => setCurrentProcess(null), 1000);
     }
   }, [images, columns, extractedData]);
 
@@ -146,6 +178,25 @@ export default function Home() {
           {/* Step 2: Define Schema */}
           <SchemaBuilder columns={columns} onColumnsChange={setColumns} />
 
+          {/* Progress Bar */}
+          {currentProcess && (
+            <div className="space-y-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2 text-indigo-300">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="font-medium">
+                    Processing Image {currentProcess.current} of {currentProcess.total}
+                  </span>
+                </div>
+                <span className="font-mono text-indigo-400">{progress}%</span>
+              </div>
+              <Progress value={progress} />
+              <p className="text-center text-[10px] text-indigo-400/60 uppercase tracking-widest">
+                Safe Strategy: Processing one by one to avoid rate limits
+              </p>
+            </div>
+          )}
+
           {/* Extract Button */}
           <Button
             onClick={handleExtract}
@@ -153,8 +204,17 @@ export default function Home() {
             size="lg"
             className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-500/20 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-40 disabled:shadow-none transition-all duration-300"
           >
-            <Wand2 className="mr-2 h-5 w-5" />
-            {isLoading ? "Extracting..." : `Extract Data with AI${images.length > 1 ? ` (${images.length} images)` : ""}`}
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Wand2 className="mr-2 h-5 w-5" />
+                Extract Data with AI{images.length > 1 ? ` (${images.length} images)` : ""}
+              </>
+            )}
           </Button>
 
           {/* Error & Warnings */}
